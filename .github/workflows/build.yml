@@ -1,0 +1,127 @@
+name: Build C++ ENBL (Windows)
+
+on:
+  push:
+    branches: ["main"]   # change if your branch is master/dev
+  workflow_dispatch:
+
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # -----------------------------
+      # Checkout
+      # -----------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------
+      # Setup MSVC
+      # -----------------------------
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # -----------------------------
+      # Ensure WiX is installed
+      # -----------------------------
+      - name: Ensure WiX Toolset is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
+            choco install wixtoolset -y --no-progress
+          }
+
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+            "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin",
+            "${env:ChocolateyInstall}\bin"
+          )
+
+          $wixBin = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $wixBin) { throw "WiX bin folder not found in common locations." }
+
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          candle.exe -? | Out-Null
+          light.exe  -? | Out-Null
+          Write-Host "WiX OK from: $wixBin"
+
+      # -----------------------------
+      # Clean build dir
+      # -----------------------------
+      - name: Clean build directory
+        shell: pwsh
+        run: |
+          if (Test-Path build) {
+            Remove-Item -Recurse -Force build
+          }
+
+      # -----------------------------
+      # Configure CMake
+      # -----------------------------
+      - name: Configure CMake
+        run: >
+          cmake -S . -B build
+
+      # -----------------------------
+      # Build EXEs
+      # -----------------------------
+      - name: Build (Release)
+        run: cmake --build build --config Release
+
+      # -----------------------------
+      # Bundle PDFium for portable reader
+      # -----------------------------
+      - name: Bundle pdfium.dll (portable reader)
+        shell: pwsh
+        run: |
+          Copy-Item third_party\pdfium\bin\pdfium.dll build\Release\ -Force
+
+      # -----------------------------
+      # Build MSI (CMake target runs candle/light)
+      # -----------------------------
+      - name: Build MSI (enbl-reader-msi)
+        run: cmake --build build --config Release --target enbl-reader-msi
+
+      # -----------------------------
+      # Collect artifacts (3 outputs)
+      # -----------------------------
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts\portable-reader   | Out-Null
+          New-Item -ItemType Directory -Force -Path artifacts\portable-converter| Out-Null
+          New-Item -ItemType Directory -Force -Path artifacts\msi              | Out-Null
+
+          # Portable Reader (needs pdfium.dll)
+          Copy-Item build\Release\enbl-reader.exe artifacts\portable-reader\ -Force
+          Copy-Item build\Release\pdfium.dll     artifacts\portable-reader\ -Force
+
+          # Portable Converter (standalone)
+          Copy-Item build\Release\enbl-converter.exe artifacts\portable-converter\ -Force
+
+          # MSI
+          Copy-Item build\ExamNibblesReader.msi artifacts\msi\ -Force
+
+      # -----------------------------
+      # Upload artifacts (3 artifacts)
+      # -----------------------------
+      - name: Upload portable reader
+        uses: actions/upload-artifact@v4
+        with:
+          name: enbl-reader-portable
+          path: artifacts/portable-reader
+
+      - name: Upload portable converter
+        uses: actions/upload-artifact@v4
+        with:
+          name: enbl-converter-portable
+          path: artifacts/portable-converter
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: enbl-reader-msi
+          path: artifacts/msi
