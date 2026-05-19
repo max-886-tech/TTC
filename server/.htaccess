@@ -1,0 +1,9 @@
+# Block direct access to config/lib/sql (important if everything is in public_html)
+<IfModule mod_authz_core.c>
+  <FilesMatch "^(config\.php)$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+
+# Deny listing
+Options -Indexes
