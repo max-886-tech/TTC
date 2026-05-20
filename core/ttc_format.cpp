@@ -18,7 +18,7 @@ static constexpr uint64_t MAX_PAYLOAD_SIZE  = 500ull * 1024ull * 1024ull; // 500
 // -------------------------------------------------
 std::vector<uint8_t> SerializeMetadata(const TtcMetadata& meta) {
     json j;
-    j["examId"] = meta.examId;
+    j["dumpId"] = meta.dumpId;
     j["user"] = meta.user;
     j["expiryAbs"] = meta.expiryAbsolute;
     j["expiryRelHours"] = meta.expiryRelativeHrs;
@@ -40,7 +40,7 @@ bool ParseMetadata(
             std::string(jsonBytes.begin(), jsonBytes.end())
         );
 
-        outMeta.examId            = j.value("examId", "");
+        outMeta.dumpId            = j.value("dumpId", "");
         outMeta.user              = j.value("user", "");
         outMeta.expiryAbsolute    = j.value("expiryAbs", "");
         outMeta.expiryRelativeHrs = j.value("expiryRelHours", 0);

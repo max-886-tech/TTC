@@ -110,7 +110,7 @@ static std::filesystem::path AutoOutPath(const std::filesystem::path& folder, co
     return folder / (stem + L".ttc");
 }
 
-static std::string AutoExamIdFromPdfName(const std::filesystem::path& pdfPath) {
+static std::string AutoDumpsIdFromPdfName(const std::filesystem::path& pdfPath) {
     return WideToUtf8(pdfPath.stem().wstring());
 }
 
@@ -188,7 +188,7 @@ static bool BrowseFolder(HWND owner, const std::filesystem::path& initial, std::
 static bool ConvertPdfToTtc(
     const std::filesystem::path& pdfPath,
     const std::filesystem::path& outPath,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     std::string& outFileId,
     std::string& outErr
 ) {
@@ -210,7 +210,7 @@ static bool ConvertPdfToTtc(
     std::string metaJson =
         "{"
           "\"schema\":2,"
-          "\"examId\":\"" + JsonEscape(examIdUtf8) + "\","
+          "\"dumpId\":\"" + JsonEscape(dumpIdUtf8) + "\","
           "\"fileId\":\"" + JsonEscape(fileId) + "\","
           "\"user\":\"\","
           "\"expiryAbs\":\"\","
@@ -278,8 +278,8 @@ static constexpr int IDC_BTN_EXIT      = 2008;
 
 static HWND g_edPdf  = nullptr;
 static HWND g_edOut  = nullptr;
-static HWND g_edExam = nullptr;
-static HWND g_chkAutoExam = nullptr;
+static HWND g_edDumps = nullptr;
+static HWND g_chkAutoDumps = nullptr;
 static HWND g_btnGo  = nullptr;
 
 static std::filesystem::path g_pdfPath;
@@ -317,12 +317,12 @@ static void SyncUiState(HWND hwnd) {
     RecalcOutputPath();
     SetText(g_edOut, g_outPath.empty() ? L"" : g_outPath.wstring());
 
-    // exam checkbox behavior
-    bool autoExam = IsChecked(g_chkAutoExam);
-    EnableWindow(g_edExam, autoExam ? FALSE : TRUE);
+    // dumps checkbox behavior
+    bool autoDumps = IsChecked(g_chkAutoDumps);
+    EnableWindow(g_edDumps, autoDumps ? FALSE : TRUE);
 
-    if (!g_pdfPath.empty() && autoExam) {
-        SetText(g_edExam, Utf8ToWide(AutoExamIdFromPdfName(g_pdfPath)));
+    if (!g_pdfPath.empty() && autoDumps) {
+        SetText(g_edDumps, Utf8ToWide(AutoDumpsIdFromPdfName(g_pdfPath)));
     }
 
     // Convert enabled only if PDF selected
@@ -376,23 +376,23 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
 
         y += rowH + pad;
 
-        // Exam row
+        // Dumps row
         CreateWindowExW(0, L"STATIC", L"Dumps Code:", WS_CHILD | WS_VISIBLE,
             x, y + 4, labelW, rowH, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
 
-        g_edExam = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+        g_edDumps = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
             WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
             x + labelW, y, wEd, rowH, hwnd, (HMENU)(INT_PTR)IDC_ED_EXAM, GetModuleHandleW(nullptr), nullptr);
 
         y += rowH + DpiScale(hwnd, 6);
 
-        // Checkbox under exam
-        g_chkAutoExam = CreateWindowExW(0, L"BUTTON", L"Use PDF filename as Dumps Code",
+        // Checkbox under dumps
+        g_chkAutoDumps = CreateWindowExW(0, L"BUTTON", L"Use PDF filename as Dumps Code",
             WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
             x + labelW, y, wEd + wBtn, rowH,
             hwnd, (HMENU)(INT_PTR)IDC_CHK_AUTOEXAM, GetModuleHandleW(nullptr), nullptr);
 
-        SetChecked(g_chkAutoExam, true); // default ON
+        SetChecked(g_chkAutoDumps, true); // default ON
 
         y += rowH + pad + DpiScale(hwnd, 4);
 
@@ -408,7 +408,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             hwnd, (HMENU)(INT_PTR)IDC_BTN_EXIT, GetModuleHandleW(nullptr), nullptr);
 
         EnableWindow(g_btnGo, FALSE);
-        EnableWindow(g_edExam, FALSE); // because checkbox ON initially
+        EnableWindow(g_edDumps, FALSE); // because checkbox ON initially
         return 0;
     }
 
@@ -456,16 +456,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             if (g_outFolder.empty()) g_outFolder = g_pdfPath.parent_path();
             RecalcOutputPath();
 
-            // exam code logic
-            std::string examIdUtf8;
-            if (IsChecked(g_chkAutoExam)) {
-                examIdUtf8 = AutoExamIdFromPdfName(g_pdfPath);
+            // dumps code logic
+            std::string dumpIdUtf8;
+            if (IsChecked(g_chkAutoDumps)) {
+                dumpIdUtf8 = AutoDumpsIdFromPdfName(g_pdfPath);
             } else {
-                std::wstring wExam = GetText(g_edExam);
-                examIdUtf8 = WideToUtf8(wExam);
-                if (examIdUtf8.empty()) {
+                std::wstring wDumps = GetText(g_edDumps);
+                dumpIdUtf8 = WideToUtf8(wDumps);
+                if (dumpIdUtf8.empty()) {
                     MsgErr(hwnd, L"Please enter Dumps Code (or enable the checkbox).");
-                    SetFocus(g_edExam);
+                    SetFocus(g_edDumps);
                     return 0;
                 }
             }
@@ -473,7 +473,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             EnableWindow(g_btnGo, FALSE);
 
             std::string fileId, err;
-            bool ok = ConvertPdfToTtc(g_pdfPath, g_outPath, examIdUtf8, fileId, err);
+            bool ok = ConvertPdfToTtc(g_pdfPath, g_outPath, dumpIdUtf8, fileId, err);
 
             EnableWindow(g_btnGo, TRUE);
 
@@ -483,8 +483,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             }
 
             std::wstring msg =
-                L"TTC dumps file created:\n\n" + g_outPath.wstring() +
-                L"\n\nDumps Code: " + Utf8ToWide(examIdUtf8) +
+                L"TTC file created:\n\n" + g_outPath.wstring() +
+                L"\n\nDumps Code: " + Utf8ToWide(dumpIdUtf8) +
                 L"\nFile ID: " + Utf8ToWide(fileId);
 
             MsgInfo(hwnd, msg);

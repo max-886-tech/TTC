@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(truecerts_ttc_win32 LANGUAGES CXX)
+project(ttc_win32 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,9 +31,14 @@ target_link_libraries(ttc-core bcrypt)
 # -----------------------------
 add_executable(ttc-reader
     reader-win32/main.cpp
+    reader-win32/app_controller.cpp
     reader-win32/pdf_viewer.cpp
     reader-win32/watermark.cpp
     reader-win32/license_online.cpp
+    reader-win32/protection.cpp
+    reader-win32/ui_common.cpp
+    reader-win32/ui_access.cpp
+    reader-win32/ui_download.cpp
 )
 
 set_target_properties(ttc-reader PROPERTIES
@@ -107,17 +112,17 @@ endif()
 
 # -----------------------------
 # MSI (WiX) packaging for ttc-reader
-# Installs to: C:\TheTrueCerts.com\
+# Installs to: C:\thetruecerts.com\
 # Registers .ttc association
 #
 # REQUIREMENTS:
 # - WiX Toolset installed (candle.exe, light.exe available in PATH)
-# - Update installer/TrueCertsReader.wxs UpgradeCode GUID
+# - Update installer/TheTrueCertsReader.wxs UpgradeCode GUID
 # - Adjust pdfium.dll path below if your runtime DLL is elsewhere
 # -----------------------------
 set(MSI_STAGE_DIR "${CMAKE_BINARY_DIR}/msi_stage")
-set(MSI_WXS "${CMAKE_CURRENT_SOURCE_DIR}/installer/TrueCertsReader.wxs")
-set(MSI_OUT "${CMAKE_BINARY_DIR}/TrueCertsReader.msi")
+set(MSI_WXS "${CMAKE_CURRENT_SOURCE_DIR}/installer/TheTrueCertsReader.wxs")
+set(MSI_OUT "${CMAKE_BINARY_DIR}/TheTrueCertsReader.msi")
 
 add_custom_target(ttc-reader-msi
   DEPENDS ttc-reader
@@ -129,10 +134,10 @@ add_custom_target(ttc-reader-msi
   COMMAND candle.exe -nologo
   -dSourceDir="${MSI_STAGE_DIR}"
   -dRepoDir="${CMAKE_CURRENT_SOURCE_DIR}"
-  -out "${CMAKE_BINARY_DIR}/TrueCertsReader.wixobj"
+  -out "${CMAKE_BINARY_DIR}/TheTrueCertsReader.wixobj"
   "${MSI_WXS}"
 
-  COMMAND light.exe  -nologo -ext WixUIExtension -out "${MSI_OUT}" "${CMAKE_BINARY_DIR}/TrueCertsReader.wixobj"
+  COMMAND light.exe  -nologo -ext WixUIExtension -out "${MSI_OUT}" "${CMAKE_BINARY_DIR}/TheTrueCertsReader.wixobj"
 
   BYPRODUCTS "${MSI_OUT}"
   COMMENT "Building MSI installer: ${MSI_OUT}"

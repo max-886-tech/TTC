@@ -161,8 +161,8 @@ static std::wstring Tail(const std::wstring& s, size_t n) {
 
 // ---------------- public: build watermark ----------------
 std::wstring BuildAntiShareWatermark(
-    const std::wstring& examName,
-    const std::wstring& examId,
+    const std::wstring& dumpName,
+    const std::wstring& dumpId,
     const std::wstring& userTag,
     const std::wstring& orderId
 ) {
@@ -179,9 +179,9 @@ std::wstring BuildAntiShareWatermark(
     std::wstring t = NowLocalTimeShort();
 
     // 4 lines
-    std::wstring line1 = L"TrueCerts";
-    if (!examName.empty()) line1 += L" | " + examName;
-    if (!examId.empty())   line1 += L" | " + examId;
+    std::wstring line1 = L"TheTrueCerts";
+    if (!dumpName.empty()) line1 += L" | " + dumpName;
+    if (!dumpId.empty())   line1 += L" | " + dumpId;
 
     std::wstring line2 = L"User: " + user + L" | PC: " + pc;
 

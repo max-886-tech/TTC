@@ -1,10 +1,9 @@
-name: Build C++ ENBL (Windows)
+name: Build C++ TTC (Windows)
 
 on:
   push:
     branches: ["main"]   # change if your branch is master/dev
   workflow_dispatch:
-
 
 jobs:
   build-windows:
@@ -72,18 +71,10 @@ jobs:
         run: cmake --build build --config Release
 
       # -----------------------------
-      # Bundle PDFium for portable reader
-      # -----------------------------
-      - name: Bundle pdfium.dll (portable reader)
-        shell: pwsh
-        run: |
-          Copy-Item third_party\pdfium\bin\pdfium.dll build\Release\ -Force
-
-      # -----------------------------
       # Build MSI (CMake target runs candle/light)
       # -----------------------------
-      - name: Build MSI (enbl-reader-msi)
-        run: cmake --build build --config Release --target enbl-reader-msi
+      - name: Build MSI (ttc-reader-msi)
+        run: cmake --build build --config Release --target ttc-reader-msi
 
       # -----------------------------
       # Collect artifacts (3 outputs)
@@ -95,15 +86,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts\portable-converter| Out-Null
           New-Item -ItemType Directory -Force -Path artifacts\msi              | Out-Null
 
-          # Portable Reader (needs pdfium.dll)
-          Copy-Item build\Release\enbl-reader.exe artifacts\portable-reader\ -Force
-          Copy-Item build\Release\pdfium.dll     artifacts\portable-reader\ -Force
+          # Portable Reader
+          Copy-Item build\Release\ttc-reader.exe artifacts\portable-reader\ -Force
 
           # Portable Converter (standalone)
-          Copy-Item build\Release\enbl-converter.exe artifacts\portable-converter\ -Force
+          Copy-Item build\Release\ttc-converter.exe artifacts\portable-converter\ -Force
 
           # MSI
-          Copy-Item build\ExamNibblesReader.msi artifacts\msi\ -Force
+          Copy-Item build\TheTrueCertsReader.msi artifacts\msi\ -Force
 
       # -----------------------------
       # Upload artifacts (3 artifacts)
@@ -111,17 +101,17 @@ jobs:
       - name: Upload portable reader
         uses: actions/upload-artifact@v4
         with:
-          name: enbl-reader-portable
+          name: ttc-reader-portable
           path: artifacts/portable-reader
 
       - name: Upload portable converter
         uses: actions/upload-artifact@v4
         with:
-          name: enbl-converter-portable
+          name: ttc-converter-portable
           path: artifacts/portable-converter
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: enbl-reader-msi
+          name: ttc-reader-msi
           path: artifacts/msi

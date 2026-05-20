@@ -33,7 +33,7 @@ struct TtcHeader {
 // Metadata
 // -----------------------------
 struct TtcMetadata {
-    std::string examId;
+    std::string dumpId;
     std::string user;
     std::string expiryAbsolute;
     uint32_t    expiryRelativeHrs;

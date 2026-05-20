@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/session.php';
-require_once __DIR__ . '/rbac.php';
 
 function current_user(): ?array {
   start_secure_session();
@@ -12,12 +11,6 @@ function current_user(): ?array {
   $stmt->execute([$_SESSION['user_id']]);
   $u = $stmt->fetch();
   if (!$u || (int)$u['is_active'] !== 1) return null;
-
-  // RBAC enrich
-  $uid = (int)$u['id'];
-  $legacy_role = (string)($u['role'] ?? 'viewer');
-  $u['roles'] = rbac_user_roles($pdo, $uid, $legacy_role);
-  $u['permissions'] = rbac_user_permissions($pdo, $uid, $legacy_role);
   return $u;
 }
 
@@ -30,25 +23,14 @@ function require_login(): array {
   return $u;
 }
 
-function require_permission(string $perm): array {
+function require_admin(): array {
   $u = require_login();
-  if (!rbac_has_permission($u, $perm)) {
+  if (($u['role'] ?? '') !== 'admin') {
     http_response_code(403);
     echo "Forbidden";
     exit;
   }
   return $u;
-}
-
-// Backward-compatible helper.
-function require_admin(): array {
-  return require_permission('roles.manage');
-}
-
-function can(string $perm): bool {
-  $u = current_user();
-  if (!$u) return false;
-  return rbac_has_permission($u, $perm);
 }
 
 function login_user(string $username, string $password): bool {

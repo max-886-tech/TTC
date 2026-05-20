@@ -1,12 +1,9 @@
 <?php
-require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/_header.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_once __DIR__ . '/../lib/audit.php';
-
-$me = require_login();
-require_permission('code.delete');
 
 $pdo = db();
 $id = (int)($_GET['id'] ?? 0);
@@ -43,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $msg = 'Delete failed: ' . $e->getMessage();
   }
 }
-require_once __DIR__ . '/_header.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -63,7 +59,7 @@ require_once __DIR__ . '/_header.php';
 
   <div class="row g-2 mb-3">
     <div class="col-md-6">
-      <div class="text-muted small">Exam</div>
+      <div class="text-muted small">Dumps</div>
       <div><strong><?= h($row['exam_name'] ?? '') ?></strong></div>
       <div class="mono text-muted small"><?= h($row['exam_id'] ?? '') ?></div>
     </div>

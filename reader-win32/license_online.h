@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <cstdint>
 
 namespace ttc::reader::license {
 
@@ -11,7 +12,7 @@ struct ServerConfig {
     bool useHttps = true;
 
     int timeoutMs = 8000;
-    std::wstring userAgent = L"TrueCerts-Reader/1.0";
+    std::wstring userAgent = L"TTC-Reader/1.0";
 };
 
 // Data returned by server on success (or partial info even on failure).
@@ -22,8 +23,8 @@ struct LicenseInfo {
     std::string message;      // error/message from server
     std::string expires_at;   // UTC string, e.g. "2026-02-01 12:00:00"
 
-    std::string exam_id;
-    std::string exam_name;
+    std::string dump_id;
+    std::string dump_name;
 
     std::string user_email;
     std::string user_phone;
@@ -52,17 +53,20 @@ bool GetDownloadUrl(
 );
 
 // Downloads the URL to a local file path (creates/overwrites the file).
+using ProgressCallback = void(*)(uint64_t downloaded, uint64_t total, void* user);
 bool DownloadUrlToFile(
     const std::wstring& url,
     const std::wstring& outPath,
     int timeoutMs,
-    std::string& outError
+    std::string& outError,
+    void* progressUser = nullptr,
+    ProgressCallback progressCb = nullptr
 );
 
 // New: Validate + parse JSON fields
 bool ValidateAccessCodeInfo(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     LicenseInfo& outInfo,
     std::string& outError
@@ -70,7 +74,7 @@ bool ValidateAccessCodeInfo(
 
 bool ValidateAccessCodeWithDeviceInfo(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     const std::string& deviceIdUtf8,
     LicenseInfo& outInfo,
@@ -80,14 +84,14 @@ bool ValidateAccessCodeWithDeviceInfo(
 // Backward compatible APIs (still supported)
 bool ValidateAccessCode(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     std::string& outError
 );
 
 bool ValidateAccessCodeWithDevice(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     const std::string& deviceIdUtf8,
     std::string& outError

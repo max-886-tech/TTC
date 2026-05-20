@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product
+    Id="*"
+    Name="TheTrueCerts Reader"
+    Manufacturer="thetruecerts.com"
+    Language="1033"
+    Version="1.0.2"
+    UpgradeCode="{64056014-3229-40A5-BC7E-B5E8D0EE421A}">
+
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perMachine"
+      InstallPrivileges="elevated" />
+
+    <!-- Force root drive (exact C:\thetruecerts.com\) -->
+    <Property Id="ROOTDRIVE" Value="C:\" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- Single-file MSI -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+
+      <!-- Install directory: C:\thetruecerts.com\ -->
+      <Directory Id="INSTALLDIR" Name="thetruecerts.com" />
+
+      <!-- ✅ Per-user Start Menu (Roaming): %APPDATA%\Microsoft\Windows\Start Menu\Programs -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="TheTrueCertsMenuDir" Name="thetruecerts.com" />
+      </Directory>
+
+    </Directory>
+
+    <Feature Id="MainFeature" Title="TheTrueCerts Reader" Level="1">
+      <ComponentGroupRef Id="CG_Main" />
+    </Feature>
+
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.RepoDir)\installer\license.rtf" />
+    <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+  </Product>
+
+  <!-- =========================
+       INSTALLDIR components
+       ========================= -->
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+
+      <!-- Main EXE (per-machine) -->
+      <Component Id="cmpReaderExe" Guid="{7DB41681-E610-4775-9404-BA25415560CC}">
+        <File Id="filReaderExe" Source="$(var.SourceDir)\ttc-reader.exe" KeyPath="yes" />
+
+        <!-- Optional: Win+R / Search launch by filename -->
+        <RegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\ttc-reader.exe">
+          <RegistryValue Type="string" Value="[#filReaderExe]" />
+          <RegistryValue Name="Path" Type="string" Value="[INSTALLDIR]" />
+        </RegistryKey>
+
+        <!-- .ttc association (per-machine) -->
+        <RegistryKey Root="HKCR" Key=".ttc">
+          <RegistryValue Type="string" Value="TheTrueCerts.ttc"/>
+        </RegistryKey>
+
+        <RegistryKey Root="HKCR" Key=".ttc\OpenWithProgids">
+          <RegistryValue Name="TheTrueCerts.ttc" Type="string" Value=""/>
+        </RegistryKey>
+
+        <RegistryKey Root="HKCR" Key="TheTrueCerts.ttc">
+          <RegistryValue Type="string" Value="TheTrueCerts TTC Dumps File"/>
+        </RegistryKey>
+
+        <RegistryKey Root="HKCR" Key="TheTrueCerts.ttc\DefaultIcon">
+          <RegistryValue Type="string" Value="&quot;[#filReaderExe]&quot;,0"/>
+        </RegistryKey>
+
+        <RegistryKey Root="HKCR" Key="TheTrueCerts.ttc\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[#filReaderExe]&quot; &quot;%1&quot;"/>
+        </RegistryKey>
+
+        <RemoveRegistryKey Root="HKCR" Key="TheTrueCerts.ttc" Action="removeOnUninstall"/>
+        <RemoveRegistryKey Root="HKCR" Key=".ttc" Action="removeOnUninstall"/>
+
+      </Component>
+
+      <!-- pdfium.dll -->
+      <Component Id="cmpPdfium" Guid="{EFF53763-518E-4A77-8616-C61DE6AA032E}">
+        <File Id="filPdfium" Source="$(var.SourceDir)\pdfium.dll" KeyPath="yes" />
+      </Component>
+
+    </DirectoryRef>
+  </Fragment>
+
+  <!-- =========================
+       Start Menu shortcut (per-user roaming)
+       ========================= -->
+  <Fragment>
+    <DirectoryRef Id="TheTrueCertsMenuDir">
+      <Component Id="cmpStartMenuShortcut" Guid="{07861F61-815E-46D5-839C-283A40EC82D2}">
+        <Shortcut Id="StartMenuShortcut"
+                  Name="TheTrueCerts Reader"
+                  Description="TheTrueCerts Reader"
+                  Target="[#filReaderExe]"
+                  WorkingDirectory="INSTALLDIR" />
+
+        <RemoveFolder Id="RemoveTheTrueCertsMenuDir" Directory="TheTrueCertsMenuDir" On="uninstall" />
+
+        <!-- ✅ KeyPath MUST be HKCU because this component installs into user profile -->
+        <RegistryValue Root="HKCU"
+                       Key="Software\thetruecerts.com\TheTrueCerts Reader"
+                       Name="StartMenuShortcut"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+
+  <!-- =========================
+       Component group
+       ========================= -->
+  <Fragment>
+    <ComponentGroup Id="CG_Main">
+      <ComponentRef Id="cmpReaderExe" />
+      <ComponentRef Id="cmpPdfium" />
+      <ComponentRef Id="cmpStartMenuShortcut" />
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

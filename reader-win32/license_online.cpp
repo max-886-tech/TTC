@@ -66,7 +66,7 @@ static std::string Trim(const std::string& s) {
 
 // -------------------------
 // Minimal JSON extraction (no external libs)
-// Supports keys like: "ok":true, "exam_name":"..", "user_phone":null
+// Supports keys like: "ok":true, "dump_name":"..", "user_phone":null
 // -------------------------
 static bool JsonFindKeyPos(const std::string& json, const std::string& key, size_t& outPos) {
     // look for "key" or 'key'
@@ -283,7 +283,7 @@ static bool WinHttpPostForm(
 // -------------------------
 static bool ValidateInternalInfo(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     const std::string* deviceIdUtf8,
     LicenseInfo& outInfo,
@@ -292,13 +292,13 @@ static bool ValidateInternalInfo(
     outError.clear();
     outInfo = LicenseInfo{};
 
-    const std::string examId = Trim(examIdUtf8);
+    const std::string dumpId = Trim(dumpIdUtf8);
     const std::string code   = Trim(codeUtf8);
 
-    if (examId.empty()) { outError = "Missing examId"; return false; }
+    if (dumpId.empty()) { outError = "Missing dumpId"; return false; }
     if (code.empty())   { outError = "Missing password/code"; return false; }
 
-    std::string body = "exam_id=" + UrlEncode(examId) + "&code=" + UrlEncode(code);
+    std::string body = "exam_id=" + UrlEncode(dumpId) + "&code=" + UrlEncode(code);
     if (deviceIdUtf8 && !deviceIdUtf8->empty()) body += "&device_id=" + UrlEncode(*deviceIdUtf8);
 
     int httpStatus = 0;
@@ -316,8 +316,8 @@ static bool ValidateInternalInfo(
     if (outInfo.message.empty()) JsonGetString(resp, "error", outInfo.message);
 
     JsonGetString(resp, "expires_at", outInfo.expires_at);
-    JsonGetString(resp, "exam_id", outInfo.exam_id);
-    JsonGetString(resp, "exam_name", outInfo.exam_name);
+    JsonGetString(resp, "exam_id", outInfo.dump_id);
+    JsonGetString(resp, "exam_name", outInfo.dump_name);
     JsonGetString(resp, "user_email", outInfo.user_email);
     JsonGetString(resp, "user_phone", outInfo.user_phone);
     JsonGetString(resp, "user_address", outInfo.user_address);
@@ -329,7 +329,7 @@ static bool ValidateInternalInfo(
     JsonGetBool(resp, "force_update", outInfo.force_update);
 
     // If server didn’t return exam_id, fallback to what we sent
-    if (outInfo.exam_id.empty()) outInfo.exam_id = examId;
+    if (outInfo.dump_id.empty()) outInfo.dump_id = dumpId;
 
     // Enforce: 200 + ok:true
     if (httpStatus != 200) {
@@ -353,45 +353,45 @@ static bool ValidateInternalInfo(
 // Public APIs
 bool ValidateAccessCodeInfo(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     LicenseInfo& outInfo,
     std::string& outError
 ) {
-    return ValidateInternalInfo(cfg, examIdUtf8, codeUtf8, nullptr, outInfo, outError);
+    return ValidateInternalInfo(cfg, dumpIdUtf8, codeUtf8, nullptr, outInfo, outError);
 }
 
 bool ValidateAccessCodeWithDeviceInfo(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     const std::string& deviceIdUtf8,
     LicenseInfo& outInfo,
     std::string& outError
 ) {
-    return ValidateInternalInfo(cfg, examIdUtf8, codeUtf8, &deviceIdUtf8, outInfo, outError);
+    return ValidateInternalInfo(cfg, dumpIdUtf8, codeUtf8, &deviceIdUtf8, outInfo, outError);
 }
 
 // Backward compatible wrappers
 bool ValidateAccessCode(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     std::string& outError
 ) {
     LicenseInfo info;
-    return ValidateAccessCodeInfo(cfg, examIdUtf8, codeUtf8, info, outError);
+    return ValidateAccessCodeInfo(cfg, dumpIdUtf8, codeUtf8, info, outError);
 }
 
 bool ValidateAccessCodeWithDevice(
     const ServerConfig& cfg,
-    const std::string& examIdUtf8,
+    const std::string& dumpIdUtf8,
     const std::string& codeUtf8,
     const std::string& deviceIdUtf8,
     std::string& outError
 ) {
     LicenseInfo info;
-    return ValidateAccessCodeWithDeviceInfo(cfg, examIdUtf8, codeUtf8, deviceIdUtf8, info, outError);
+    return ValidateAccessCodeWithDeviceInfo(cfg, dumpIdUtf8, codeUtf8, deviceIdUtf8, info, outError);
 }
 
 // -------------------------
@@ -446,7 +446,9 @@ bool DownloadUrlToFile(
     const std::wstring& url,
     const std::wstring& outPath,
     int timeoutMs,
-    std::string& outError
+    std::string& outError,
+    void* progressUser,
+    ProgressCallback progressCb
 ) {
     outError.clear();
 
@@ -464,7 +466,7 @@ bool DownloadUrlToFile(
     }
 
     HINTERNET hSession = WinHttpOpen(
-        L"TrueCerts-Reader/1.0",
+        L"TTC-Reader/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
@@ -525,7 +527,29 @@ bool DownloadUrlToFile(
         return false;
     }
 
-    std::vector<char> buf(64 * 1024);
+    
+    // Try read total size for progress (may be missing on chunked responses)
+    uint64_t totalSize = 0;
+    DWORD cl = 0;
+    DWORD clSize = sizeof(cl);
+    if (WinHttpQueryHeaders(hReq,
+        WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX,
+        &cl, &clSize, WINHTTP_NO_HEADER_INDEX))
+    {
+        totalSize = (uint64_t)cl;
+    }
+    uint64_t downloaded = 0;
+    DWORD lastPct = 0xFFFFFFFFu;
+    uint64_t lastNotifyBytes = 0;
+
+    // Notify start (determinate or indeterminate)
+    if (progressCb) {
+        progressCb(0, totalSize, progressUser);
+        if (totalSize > 0) lastPct = 0;
+    }
+
+std::vector<char> buf(64 * 1024);
     for (;;) {
         DWORD avail = 0;
         if (!WinHttpQueryDataAvailable(hReq, &avail)) break;
@@ -545,7 +569,26 @@ bool DownloadUrlToFile(
             CloseHandle(hFile);
             return false;
         }
-    }
+    
+        downloaded += written;
+
+        if (progressCb) {
+            if (totalSize > 0) {
+                DWORD pct = (DWORD)((downloaded * 100ULL) / totalSize);
+                if (pct != lastPct) {
+                    lastPct = pct;
+                    progressCb(downloaded, totalSize, progressUser);
+                }
+            } else {
+                // Indeterminate: Content-Length missing (chunked). Throttle updates.
+                const uint64_t kStep = 256ULL * 1024ULL; // 256 KB
+                if (downloaded - lastNotifyBytes >= kStep) {
+                    lastNotifyBytes = downloaded;
+                    progressCb(downloaded, 0, progressUser);
+                }
+            }
+        }
+}
 
     WinHttpCloseHandle(hReq);
     WinHttpCloseHandle(hConnect);

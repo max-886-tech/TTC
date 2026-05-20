@@ -14,12 +14,6 @@ function csrf_input(): string {
   return '<input type="hidden" name="_csrf" value="' . $t . '">';
 }
 
-// Backward/Template compatibility helper
-// Some pages use csrf_field() naming.
-function csrf_field(): string {
-  return csrf_input();
-}
-
 function csrf_verify(): void {
   start_secure_session();
   $sent = $_POST['_csrf'] ?? '';

@@ -3,14 +3,14 @@ require_once __DIR__ . '/../lib/db.php';
 
 // ---------- Rate limit settings ----------
 const RATE_WINDOW_SECONDS = 600;    // 10 minutes
-const MAX_FAILS_PER_WINDOW = 8;     // failed attempts allowed per IP+exam per window
-const MAX_TOTAL_PER_WINDOW = 30;    // total attempts allowed per IP+exam per window
+const MAX_FAILS_PER_WINDOW = 8;     // failed attempts allowed per IP+dumps per window
+const MAX_TOTAL_PER_WINDOW = 30;    // total attempts allowed per IP+dumps per window
 
 // ---------- App version policy ----------
-const LATEST_VERSION = '1.0.1'; // update when you release
-const MIN_VERSION    = '1.0.1'; // raise to block old builds
+const LATEST_VERSION = '1.0.0'; // update when you release
+const MIN_VERSION    = '1.0.0'; // raise to block old builds
 const FORCE_UPDATE   = true;   // true = everyone must update to latest
-const UPDATE_URL     = 'https://thetruecerts.com/reader.zip';
+const UPDATE_URL     = 'https://thetruecerts.com/reader_1.0.0.zip';
 
 function clean_str($s, $max) {
   $s = trim((string)$s);
@@ -76,7 +76,7 @@ if ($exam_id === '' || $code === '' || $device_id === '') {
   json_out(add_version_fields([
 'ok' => false,
     'error' => 'bad_request',
-    'message' => 'Missing exam_id, code, or device_id.',
+    'message' => 'Missing dumps code, code, or device_id.',
     'server_time_utc' => utc_now_sql(),
 ]), 400);
 }
@@ -160,34 +160,20 @@ try {
     }
   }
 
-  $max_users  = max(1, (int)($row['max_users'] ?? 1));
-  $max_uses   = max(0, (int)($row['max_uses'] ?? 0)); // 0 = unlimited
-  $used_count = (int)($row['used_count'] ?? 0);       // users/devices used
-  $uses_count = (int)($row['uses_count'] ?? 0);       // total successful uses
+  $max_uses = max(1, (int)($row['max_uses'] ?? 1));
+  $used_count = (int)($row['used_count'] ?? 0);
   $bound_now = false;
   $rebound = false;
   $ts = utc_now_sql();
 
-  // Enforce total uses limit (if set)
-  if ($max_uses > 0 && $uses_count >= $max_uses) {
-    $pdo->commit();
-    log_attempt($pdo, $ip, $exam_id, false);
-    json_out(add_version_fields([
-      'ok' => false,
-      'error' => 'max_uses_reached',
-      'message' => 'No uses left for this code.',
-      'server_time_utc' => utc_now_sql(),
-    ]), 403);
-  }
-
   if (empty($row['device_hash'])) {
-    if ($used_count >= $max_users) {
+    if ($used_count >= $max_uses) {
       $pdo->commit();
       log_attempt($pdo, $ip, $exam_id, false);
       json_out(add_version_fields([
 'ok' => false,
         'error' => 'max_uses_reached',
-        'message' => 'No user activations left for this code.',
+        'message' => 'No activations left for this code.',
         'server_time_utc' => utc_now_sql(),
 ]), 403);
     }
@@ -197,15 +183,14 @@ try {
       SET device_hash = ?,
           first_used_at = COALESCE(first_used_at, ?),
           last_used_at  = ?,
-          used_count    = used_count + 1,
-          uses_count    = uses_count + 1
+          used_count    = used_count + 1
       WHERE id = ?
     ");
     $upd->execute([$devHash, $ts, $ts, $row['id']]);
     $bound_now = true;
   } else {
     if (!hash_equals($row['device_hash'], $devHash)) {
-      if ($used_count >= $max_users) {
+      if ($used_count >= $max_uses) {
         $pdo->commit();
         log_attempt($pdo, $ip, $exam_id, false);
         json_out(add_version_fields([
@@ -221,15 +206,14 @@ try {
         UPDATE access_codes
         SET device_hash = ?,
             last_used_at = ?,
-            used_count = used_count + 1,
-            uses_count = uses_count + 1
+            used_count = used_count + 1
         WHERE id = ?
       ");
       $upd->execute([$devHash, $ts, $row['id']]);
       $bound_now = true;
       $rebound = true;
     } else {
-      $upd = $pdo->prepare("UPDATE access_codes SET last_used_at=?, uses_count=uses_count+1 WHERE id=?");
+      $upd = $pdo->prepare("UPDATE access_codes SET last_used_at=? WHERE id=?");
       $upd->execute([$ts, $row['id']]);
     }
   }
@@ -249,6 +233,8 @@ try {
     'message' => 'ok',
     'exam_id' => $exam_id,
     'exam_name' => $exam_name,
+    'dump_id' => $exam_id,
+    'dump_name' => $exam_name,
     'user_name' => $user_name,
     'user_email' => $user_email,
     'user_phone' => $user_phone,
@@ -257,8 +243,6 @@ try {
     'bound_now' => $bound_now,
     'rebound' => $rebound,
     'used_count' => $used_count + ($bound_now ? 1 : 0),
-    'max_users' => $max_users,
-    'uses_count' => $uses_count + 1,
     'max_uses' => $max_uses,
 
     'expires_at' => $row['expires_at'] ?? null,       // NEW (what your C++ parses)

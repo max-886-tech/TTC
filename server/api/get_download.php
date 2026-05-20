@@ -8,8 +8,8 @@ require_once __DIR__ . '/../lib/r2.php';
 
 // ---------- Rate limit settings ----------
 const RATE_WINDOW_SECONDS = 600;    // 10 minutes
-const MAX_FAILS_PER_WINDOW = 10;    // failed attempts allowed per IP+exam per window
-const MAX_TOTAL_PER_WINDOW = 60;    // total attempts allowed per IP+exam per window
+const MAX_FAILS_PER_WINDOW = 10;    // failed attempts allowed per IP+dumps per window
+const MAX_TOTAL_PER_WINDOW = 60;    // total attempts allowed per IP+dumps per window
 
 function clean_str($s, $max) {
   $s = trim((string)$s);
@@ -145,7 +145,7 @@ if (!empty($row['expires_at'])) {
 }
 
 // Device binding (if device_id provided)
-$max_users  = max(1, (int)($row['max_users'] ?? 1));
+$max_uses   = max(1, (int)($row['max_uses'] ?? 1));
 $used_count = (int)($row['used_count'] ?? 0);
 $ts         = utc_now_sql();
 
@@ -165,21 +165,21 @@ if ($device_id !== '') {
       json_out(['ok' => false, 'error' => 'not_found', 'message' => 'Code not found.', 'server_time_utc' => utc_now_sql()], 404);
     }
 
-    $max_users  = max(1, (int)($row2['max_users'] ?? 1));
+    $max_uses   = max(1, (int)($row2['max_uses'] ?? 1));
     $used_count = (int)($row2['used_count'] ?? 0);
 
     if (empty($row2['device_hash'])) {
-      if ($used_count >= $max_users) {
+      if ($used_count >= $max_uses) {
         $pdo->rollBack();
         log_attempt($pdo, $ip, $rate_exam_id, false);
-        json_out(['ok' => false, 'error' => 'max_users_reached', 'message' => 'No user activations left for this code.', 'server_time_utc' => utc_now_sql()], 403);
+        json_out(['ok' => false, 'error' => 'max_uses_reached', 'message' => 'No activations left for this code.', 'server_time_utc' => utc_now_sql()], 403);
       }
 
       $upd = $pdo->prepare("UPDATE access_codes SET device_hash=?, first_used_at=COALESCE(first_used_at, ?), last_used_at=?, used_count=used_count+1 WHERE id=?");
       $upd->execute([$devHash, $ts, $ts, $row2['id']]);
     } else {
       if (!hash_equals($row2['device_hash'], $devHash)) {
-        if ($used_count >= $max_users) {
+        if ($used_count >= $max_uses) {
           $pdo->rollBack();
           log_attempt($pdo, $ip, $rate_exam_id, false);
           json_out(['ok' => false, 'error' => 'device_mismatch', 'message' => 'This code is locked to another device.', 'server_time_utc' => utc_now_sql()], 403);
@@ -235,6 +235,8 @@ try {
     'url' => $url,
     'exam_id' => $row['exam_id'] ?? null,
     'exam_name' => $row['exam_name'] ?? null,
+    'dump_id' => $row['exam_id'] ?? null,
+    'dump_name' => $row['exam_name'] ?? null,
     'user_name' => $row['user_name'] ?? null,
     'server_time_utc' => utc_now_sql(),
   ], 200);

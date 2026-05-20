@@ -5,8 +5,6 @@ require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_once __DIR__ . '/../lib/audit.php';
 
-require_permission('code.reset');
-
 $pdo = db();
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) { echo "Missing id"; exit; }
@@ -19,31 +17,29 @@ if (!$row) { echo "Not found"; exit; }
 $msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
-  $reset_users = isset($_POST['reset_users']) ? 1 : 0;
-  $reset_uses  = isset($_POST['reset_uses']) ? 1 : 0;
+  $reset_count = isset($_POST['reset_count']) ? 1 : 0;
 
-  $sets = [
-    'device_hash=NULL',
-    'first_used_at=NULL',
-    'last_used_at=NULL',
-  ];
-  if ($reset_users) $sets[] = 'used_count=0';
-  if ($reset_uses)  $sets[] = 'uses_count=0';
-  $sets[] = 'updated_by=?';
-
-  $sql = "UPDATE access_codes SET " . implode(', ', $sets) . " WHERE id=? LIMIT 1";
-  $upd = $pdo->prepare($sql);
-  $upd->execute([(int)$me['id'], $id]);
+  if ($reset_count) {
+    $upd = $pdo->prepare("
+      UPDATE access_codes
+      SET device_hash=NULL, first_used_at=NULL, last_used_at=NULL, used_count=0, updated_by=?
+      WHERE id=? LIMIT 1
+    ");
+    $upd->execute([(int)$me['id'], $id]);
+  } else {
+    $upd = $pdo->prepare("
+      UPDATE access_codes
+      SET device_hash=NULL, first_used_at=NULL, last_used_at=NULL, updated_by=?
+      WHERE id=? LIMIT 1
+    ");
+    $upd->execute([(int)$me['id'], $id]);
+  }
 
   audit_log_event('code_reset_device', 'access_codes', $id, [
-    'reset_users' => $reset_users,
-    'reset_uses' => $reset_uses
+    'reset_count' => $reset_count
   ]);
 
-  if ($reset_users && $reset_uses) $msg = "Device + users + uses reset.";
-  else if ($reset_users) $msg = "Device + users reset.";
-  else if ($reset_uses) $msg = "Device + uses reset.";
-  else $msg = "Device reset.";
+  $msg = $reset_count ? "Device + used_count reset." : "Device reset.";
   $stmt->execute([$id]);
   $row = $stmt->fetch();
 }
@@ -63,24 +59,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <div class="mt-3">
     <div class="text-muted small">Current device: <?= !empty($row['device_hash']) ? '<span class="mono">'.h(substr($row['device_hash'],0,16)).'…</span>' : '<span class="text-muted">none</span>' ?></div>
-    <div class="text-muted small">Users: <?= (int)($row['used_count'] ?? 0) ?> / <?= (int)($row['max_users'] ?? 1) ?></div>
-    <div class="text-muted small">Uses: <?= (int)($row['uses_count'] ?? 0) ?> / <?= ((int)($row['max_uses'] ?? 0)===0 ? '∞' : (int)$row['max_uses']) ?></div>
+    <div class="text-muted small">Used count: <?= (int)$row['used_count'] ?> / <?= (int)$row['max_uses'] ?></div>
   </div>
 
   <hr>
 
   <form method="post">
     <?= csrf_input() ?>
-    <div class="form-check mb-2">
-      <input class="form-check-input" type="checkbox" name="reset_users" id="reset_users">
-      <label class="form-check-label" for="reset_users">
-        Also reset <span class="mono">users used_count</span> to 0 (use carefully)
-      </label>
-    </div>
     <div class="form-check mb-3">
-      <input class="form-check-input" type="checkbox" name="reset_uses" id="reset_uses">
-      <label class="form-check-label" for="reset_uses">
-        Also reset <span class="mono">uses_count</span> to 0 (use carefully)
+      <input class="form-check-input" type="checkbox" name="reset_count" id="reset_count">
+      <label class="form-check-label" for="reset_count">
+        Also reset <span class="mono">used_count</span> to 0 (use carefully)
       </label>
     </div>
     <button class="btn btn-warning" type="submit">Reset Device Lock</button>

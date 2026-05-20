@@ -11,10 +11,10 @@ typedef tagRECT RECT;
 namespace ttc::reader {
 
 // Build watermark text automatically (anti-share).
-// examName/examId can be empty; userTag/orderId optional.
+// dumpName/dumpId can be empty; userTag/orderId optional.
 std::wstring BuildAntiShareWatermark(
-    const std::wstring& examName,
-    const std::wstring& examId,
+    const std::wstring& dumpName,
+    const std::wstring& dumpId,
     const std::wstring& userTag = L"",
     const std::wstring& orderId = L""
 );
